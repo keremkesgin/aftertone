@@ -2,8 +2,8 @@ import AppKit
 import Combine
 import Foundation
 
-/// Owns the provider, the poll timer and the clock. Everything in the app reads state
-/// from here; nothing else talks to a provider.
+/// Owns the provider and the poll timer. Everything in the app reads state from here;
+/// nothing else talks to a provider.
 @MainActor
 final class NowPlayingMonitor: ObservableObject {
     /// Poll intervals by state (spec §4.5).
@@ -11,28 +11,16 @@ final class NowPlayingMonitor: ObservableObject {
         static let playing: TimeInterval = 1.0
         static let paused: TimeInterval = 3.0
         static let idle: TimeInterval = 5.0
-        /// Window not visible — nothing is animating, so ground the wakeups.
-        static let occluded: TimeInterval = 10.0
         /// Automation was denied. Keep a slow heartbeat so granting it in System Settings
         /// recovers on its own, without hammering a call that can only fail (spec §4.6).
         static let denied: TimeInterval = 10.0
     }
 
     @Published private(set) var snapshot: NowPlaying = .notRunning
-    /// Non-nil drives a persistent banner. Cleared automatically on the first good poll.
+    /// Non-nil surfaces in the menu bar label. Cleared automatically on the first good poll.
     @Published private(set) var failure: NowPlayingFailure?
 
-    let clock = PlaybackClock()
     let provider: NowPlayingProvider
-
-    /// Set by the window layer from `NSWindow.occlusionState` (spec §7.4).
-    var isOccluded = false {
-        didSet {
-            guard isOccluded != oldValue else { return }
-            if !isOccluded { clock.resetFrameTiming() }
-            reschedule()
-        }
-    }
 
     /// Set during system sleep and fast user switching.
     var isSuspended = false {
@@ -42,7 +30,6 @@ final class NowPlayingMonitor: ObservableObject {
                 timer?.invalidate()
                 timer = nil
             } else {
-                clock.resetFrameTiming()
                 poll()
                 reschedule()
             }
@@ -120,32 +107,22 @@ final class NowPlayingMonitor: ObservableObject {
         switch outcome {
         case .success(let result):
             failure = nil
-            apply(result)
+            snapshot = result
         case .failure(let error as NowPlayingFailure):
             failure = error
-            // The scene should look idle rather than frozen on a stale track.
-            apply(.notRunning)
+            // Look idle rather than frozen on a stale track.
+            snapshot = .notRunning
         case .failure(let error):
             failure = .providerError(code: 0, message: error.localizedDescription)
-            apply(.notRunning)
+            snapshot = .notRunning
         }
         reschedule()
-    }
-
-    private func apply(_ result: NowPlaying) {
-        if result.state == .notRunning || result.state == .stopped {
-            if snapshot.state != result.state || snapshot.track != nil { clock.reset() }
-        } else {
-            clock.sync(to: result.position, trackID: result.track?.id, isPlaying: result.state.isPlaying)
-        }
-        snapshot = result
     }
 
     // MARK: - Scheduling
 
     private var desiredInterval: TimeInterval {
         if failure == .automationDenied { return Cadence.denied }
-        if isOccluded { return Cadence.occluded }
         switch snapshot.state {
         case .playing: return Cadence.playing
         case .paused: return Cadence.paused

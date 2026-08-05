@@ -11,10 +11,10 @@ BIN         := .build/$(CONFIG)/$(APP_NAME)
 
 # No Developer ID on this machine yet, so dev builds are ad-hoc signed. That is enough to
 # carry the apple-events entitlement under the hardened runtime and to get a real TCC
-# prompt. Phase 8 swaps this for "Developer ID Application: …" (spec §11).
+# prompt. Swap this for "Developer ID Application: …" once notarized distribution matters.
 SIGN_ID     ?= -
 
-.PHONY: all app build bundle sign run test bench artwork-bench lyrics-bench spike spike-clock clean tcc-reset print-config
+.PHONY: all app build bundle sign run test bench artwork-bench clean tcc-reset print-config
 
 all: app
 
@@ -52,33 +52,19 @@ app: sign
 run: app
 	@open "$(APP)"
 
-# Deterministic tests for the parse boundary, error mapping and the clock. Not XCTest:
+# Deterministic tests for the Spotify parse boundary and error mapping. Not XCTest:
 # XCTest.framework ships with Xcode, which is not installed here, so `swift test` cannot
 # link. Exits non-zero on failure.
 test: build
 	@"$(BIN)" --selftest
 
-# How long a poll blocks the main thread. Polling must run on the main thread, so this
-# cost comes straight out of the animation's frame budget.
+# How long a poll blocks the main thread, and whether it ever does at all.
 bench: app
 	@"$(CONTENTS)/MacOS/$(APP_NAME)" --bench
 
-# Phase 3 — artwork pipeline: cache → network → placeholder fallback, never blank.
+# Artwork pipeline: cache → network → placeholder fallback, never blank.
 artwork-bench: app
 	@"$(CONTENTS)/MacOS/$(APP_NAME)" --artwork-bench
-
-# Phase 7 — lyrics pipeline against the live current track, in a scratch directory.
-lyrics-bench: app
-	@"$(CONTENTS)/MacOS/$(APP_NAME)" --lyrics-bench
-
-# Phase 1 — 1Hz provider output. Runs the bundled binary so the TCC prompt is attributed
-# to Turntable and not to the terminal.
-spike: app
-	@"$(CONTENTS)/MacOS/$(APP_NAME)" --spike --seconds $${SECONDS_ARG:-20}
-
-# Phase 2 — 60Hz interpolation with drift diagnostics.
-spike-clock: app
-	@"$(CONTENTS)/MacOS/$(APP_NAME)" --spike-clock --seconds $${SECONDS_ARG:-20}
 
 # Ad-hoc signatures are identified by cdhash, which changes on every rebuild — so macOS
 # treats each build as a new app and the Automation grant goes stale. Clear it to get a

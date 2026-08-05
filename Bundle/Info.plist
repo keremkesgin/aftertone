@@ -23,14 +23,12 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 
-	<!-- No Dock icon, no Cmd-Tab entry — status item + desktop-level window only.
-	     `--window-mode` (the dev-only SwiftUI windowed path) still works under this;
-	     it just also lacks a Dock icon. -->
+	<!-- No Dock icon, no Cmd-Tab entry — the menu bar status item is the only UI. -->
 	<key>LSUIElement</key>
 	<true/>
 
-	<!-- Shown verbatim in the Automation TCC prompt (spec §4.6). -->
+	<!-- Shown verbatim in the Automation TCC prompt. -->
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Turntable reads the current track from Spotify to show its album artwork.</string>
+	<string>Turntable reads the current track from Spotify and sets its album artwork as your desktop wallpaper.</string>
 </dict>
 </plist>
