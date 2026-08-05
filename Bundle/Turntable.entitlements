@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The hardened runtime blocks outgoing Apple Events without this. Required for
+	     both the ad-hoc dev signature and the notarized Developer ID build (spec §4.6). -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+
+	<!-- App Sandbox is deliberately off: direct distribution, and the app reads .lrc
+	     files from arbitrary user folders (spec §2, §8.2). -->
+</dict>
+</plist>

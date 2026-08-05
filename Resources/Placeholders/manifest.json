@@ -1,0 +1,29 @@
+{
+  "artworks" : [
+    {
+      "file" : "warm-abstract-01.png",
+      "id" : "warm-abstract-01",
+      "labelTint" : "#C9A227",
+      "name" : "Warm Abstract"
+    },
+    {
+      "file" : "cool-abstract-01.png",
+      "id" : "cool-abstract-01",
+      "labelTint" : "#3E7CB1",
+      "name" : "Cool Abstract"
+    },
+    {
+      "file" : "mono-abstract-01.png",
+      "id" : "mono-abstract-01",
+      "labelTint" : "#8A8A8A",
+      "name" : "Mono Abstract"
+    },
+    {
+      "file" : "moss-abstract-01.png",
+      "id" : "moss-abstract-01",
+      "labelTint" : "#6B8E4E",
+      "name" : "Moss Abstract"
+    }
+  ],
+  "version" : 1
+}

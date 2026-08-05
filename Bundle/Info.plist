@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>Turntable</string>
+	<key>CFBundleDisplayName</key>
+	<string>Turntable</string>
+	<key>CFBundleExecutable</key>
+	<string>Turntable</string>
+	<key>CFBundleIdentifier</key>
+	<string>__BUNDLE_ID__</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>__VERSION__</string>
+	<key>CFBundleVersion</key>
+	<string>__BUILD__</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+
+	<!-- No Dock icon, no Cmd-Tab entry — status item + desktop-level window only.
+	     `--window-mode` (the dev-only SwiftUI windowed path) still works under this;
+	     it just also lacks a Dock icon. -->
+	<key>LSUIElement</key>
+	<true/>
+
+	<!-- Shown verbatim in the Automation TCC prompt (spec §4.6). -->
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Turntable reads the current track from Spotify to show its album artwork.</string>
+</dict>
+</plist>
