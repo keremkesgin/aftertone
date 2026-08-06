@@ -14,7 +14,7 @@ BIN         := .build/$(CONFIG)/$(APP_NAME)
 # prompt. Swap this for "Developer ID Application: …" once notarized distribution matters.
 SIGN_ID     ?= -
 
-.PHONY: all app build bundle sign run test bench artwork-bench clean tcc-reset print-config
+.PHONY: all app build bundle sign run test bench artwork-bench lyrics-bench clean tcc-reset print-config
 
 all: app
 
@@ -65,6 +65,12 @@ bench: app
 # Artwork pipeline: cache → network → placeholder fallback, never blank.
 artwork-bench: app
 	@"$(CONTENTS)/MacOS/$(APP_NAME)" --artwork-bench
+
+# Lyrics pipeline against the live current Spotify track: writes a synthetic .lrc to a
+# scratch directory, confirms the store matches it and the parser/active-line tracking
+# behave sanely. Never touches ~/Music/Lyrics.
+lyrics-bench: app
+	@"$(CONTENTS)/MacOS/$(APP_NAME)" --lyrics-bench
 
 # Ad-hoc signatures are identified by cdhash, which changes on every rebuild — so macOS
 # treats each build as a new app and the Automation grant goes stale. Clear it to get a

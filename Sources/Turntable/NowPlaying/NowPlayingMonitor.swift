@@ -20,6 +20,7 @@ final class NowPlayingMonitor: ObservableObject {
     /// Non-nil surfaces in the menu bar label. Cleared automatically on the first good poll.
     @Published private(set) var failure: NowPlayingFailure?
 
+    let clock = PlaybackClock()
     let provider: NowPlayingProvider
 
     /// Set during system sleep and fast user switching.
@@ -30,6 +31,7 @@ final class NowPlayingMonitor: ObservableObject {
                 timer?.invalidate()
                 timer = nil
             } else {
+                clock.resetFrameTiming()
                 poll()
                 reschedule()
             }
@@ -107,16 +109,28 @@ final class NowPlayingMonitor: ObservableObject {
         switch outcome {
         case .success(let result):
             failure = nil
-            snapshot = result
+            apply(result)
         case .failure(let error as NowPlayingFailure):
             failure = error
             // Look idle rather than frozen on a stale track.
-            snapshot = .notRunning
+            apply(.notRunning)
         case .failure(let error):
             failure = .providerError(code: 0, message: error.localizedDescription)
-            snapshot = .notRunning
+            apply(.notRunning)
         }
         reschedule()
+    }
+
+    /// Keeps `clock` reconciled against every poll result, not just the ones a caller
+    /// happens to read `snapshot` after — `LyricsColumnView` reads position from `clock`,
+    /// never from `snapshot` directly (spec §8.4).
+    private func apply(_ result: NowPlaying) {
+        if result.state == .notRunning || result.state == .stopped {
+            if snapshot.state != result.state || snapshot.track != nil { clock.reset() }
+        } else {
+            clock.sync(to: result.position, trackID: result.track?.id, isPlaying: result.state.isPlaying)
+        }
+        snapshot = result
     }
 
     // MARK: - Scheduling

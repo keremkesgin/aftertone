@@ -10,6 +10,8 @@ if arguments.contains("--selftest") {
     MainActor.assumeIsolated { PollBench.run() }
 } else if arguments.contains("--artwork-bench") {
     MainActor.assumeIsolated { ArtworkBench.run() }
+} else if arguments.contains("--lyrics-bench") {
+    MainActor.assumeIsolated { LyricsBench.run() }
 } else {
     MainActor.assumeIsolated {
         let app = NSApplication.shared

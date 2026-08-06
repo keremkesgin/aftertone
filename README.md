@@ -1,15 +1,18 @@
 # Turntable
 
 A macOS background app that mirrors whatever is playing in the **Spotify desktop client**
-by setting your actual desktop wallpaper to the current track's album artwork. No windows,
-no overlay — just a menu bar item (now-playing label + Quit).
+on your desktop: a small album-art + title/artist badge and, when synced lyrics are
+available, a Spotify-style lyrics column beneath it. It renders in a click-through window
+drawn above your actual wallpaper picture and below Finder's desktop icons, so your own
+wallpaper is never touched or replaced. A menu bar item lets you reposition the overlay
+(center or any corner) and nudge lyrics sync, alongside the now-playing label and Quit.
 
 ## Stack
 
 | | |
 |---|---|
 | Language | Swift (5.9 language mode, built with the 6.3 toolchain) |
-| UI | AppKit — a single `NSStatusItem`, nothing else |
+| UI | AppKit (a desktop-level `NSWindow` + `NSStatusItem`) hosting SwiftUI content |
 | Minimum OS | macOS 14.0 |
 | Build system | SwiftPM + `Makefile` |
 | Dependencies | none |
@@ -23,31 +26,62 @@ SwiftPM package also opens directly in Xcode if you install it later, so nothing
 ## How it works
 
 `AppDelegate` owns a `NowPlayingMonitor` (polls Spotify via AppleScript on a cadence that
-backs off when paused/idle), an `ArtworkLoader` (memory cache → disk cache → network →
-bundled placeholder, so there's always an image), and a `WallpaperSetter`. Two Combine
-subscriptions wire them together: track changes flow into the artwork loader, and
-non-placeholder artwork states flow into `WallpaperSetter.apply(_:)`, which writes the
-image to a stable file (`~/Library/Application Support/<bundle-id>/wallpaper.jpg`,
-overwritten in place — `NSWorkspace.setDesktopImageURL` needs a URL that stays valid after
-the call returns) and calls it for every `NSScreen`.
+backs off when paused/idle, and drives a `PlaybackClock` that interpolates position to
+30-60Hz between polls), an `ArtworkLoader` (memory cache → disk cache → network → bundled
+placeholder, so there's always an image), and a `LyricsLibrary`.
 
-Placeholder artwork is deliberately filtered out of that second subscription: when nothing
-is playing, or when Spotify has no artwork for the current item, the wallpaper is left
-exactly as it was rather than being overwritten with a placeholder graphic. The very first
-launch behaves the same way — your existing wallpaper stays put until the first real track
-loads.
+`LyricsLibrary` resolves the current track to lyrics two ways: a local `.lrc` first, via
+`LyricsStore` (indexes `~/Music/Lyrics/`, matches by Spotify track id → `artist - title` →
+title); and when nothing local matches, a network fetch from **lrclib.net** via
+`LyricsFetcher` — free, keyless, community-sourced synced lyrics. A successful fetch is
+cached back to `~/Music/Lyrics/<track-id>.lrc`, so the same track resolves locally (and
+offline) on every play after the first. A track with no local or fetched match simply
+shows art + title, no empty lyrics column — this is a best-effort convenience, not a
+guarantee, since a title/artist/duration mismatch can miss even when lyrics exist for the
+track under slightly different metadata.
 
-`StatusItemController` is the only UI: a disabled label showing the current track (or a
-clickable one when Automation is denied, which deep-links to the Settings pane), and Quit.
+All of that is rendered by `DesktopContentView` — a small badge (album art + title/artist)
+and, when lyrics resolved, `LyricsColumnView` beneath it, bounded to a fixed box rather
+than spanning the screen — hosted via `NSHostingView` inside a `DesktopWindow`: a
+borderless, click-through `NSWindow` sitting one level below `.desktopIconWindow`, i.e.
+above the wallpaper picture and below Finder's icons. Clicks fall straight through to
+whatever's actually on the desktop; the window never becomes key, never appears in
+Cmd-Tab, and follows every Space.
+
+Two small `@MainActor` settings objects, each backed by `UserDefaults` so they survive a
+relaunch:
+
+- **`OverlaySettings`** — where the badge/lyrics block sits: center or any of the four
+  corners. Changed from the menu bar's **Position** submenu.
+- **`LyricsSyncSettings`** — a manual offset (±5s, 0.25s steps) added to the playback
+  position before picking the active lyric line. No amount of polling accuracy fixes a
+  systematically biased `.lrc` file, or the small constant lag inherent to a 1Hz poll plus
+  Apple Event round-trip — a manual nudge is the standard fix (Musixmatch and Apple Music
+  both ship the same control). Adjusted from the menu bar's **Show Lyrics
+  Earlier**/**Later**/**Reset** items.
+
+Placeholder artwork is deliberately hidden rather than shown: the real backdrop here is
+the user's own wallpaper, so a bundled placeholder graphic would be a worse result than no
+artwork view at all.
+
+`StatusItemController` is the only other UI: the now-playing label (or a clickable one
+when Automation is denied, which deep-links to the Settings pane), the Position submenu,
+the lyrics sync controls, and Quit.
+
+`WallpaperSetter` — write the artwork to a stable file and call
+`NSWorkspace.setDesktopImageURL` per `NSScreen` — still exists on disk but is unused. It
+was the app's original design (see History below) and is easy to bring back if a
+wallpaper-replacement mode is ever wanted alongside the overlay.
 
 ## Build and run
 
 ```sh
 make app          # build + assemble + ad-hoc sign build/Turntable.app
 make run          # launch it
-make test          # deterministic tests (parse boundary, error mapping)
+make test          # deterministic tests (parsing, clock, LRC, lyrics matching, errors)
 make bench         # poll cost: round-trip latency vs. main-thread stall
 make artwork-bench # cache → network → placeholder fallback, never blank
+make lyrics-bench  # store/parser/active-line sanity against the live current track
 make tcc-reset     # clear the Automation grant to re-test the permission path
 make clean
 ```
@@ -100,24 +134,38 @@ version of this app:
 ```
 Sources/Turntable/
 ├── main.swift                       # arg dispatch: default is the real app;
-│                                      # --selftest/--bench/--artwork-bench run headless
-├── AppDelegate.swift                 # wires monitor → artwork → wallpaper, owns lifecycle
-├── Wallpaper/
-│   └── WallpaperSetter.swift        # writes artwork to a stable file, sets it per NSScreen
+│                                      # --selftest/--bench/--artwork-bench/--lyrics-bench
+│                                      # all run headless
+├── AppDelegate.swift                 # wires monitor → desktop window, owns lifecycle
 ├── Window/
-│   └── StatusItemController.swift   # the only UI: now-playing label + quit
+│   ├── DesktopWindow.swift          # borderless NSWindow at desktop level, click-through
+│   ├── DesktopContentView.swift     # composes the badge + LyricsColumnView, positioned per OverlaySettings
+│   ├── OverlaySettings.swift        # persisted screen position: center or a corner
+│   └── StatusItemController.swift   # the only other UI: now-playing label, Position menu, sync controls, quit
 ├── NowPlaying/
 │   ├── NowPlayingProvider.swift     # the abstraction; keep it genuinely abstract
 │   ├── SpotifyProvider.swift        # the only place Spotify's units/errors exist
-│   ├── NowPlayingMonitor.swift      # poll timer, cadence, sleep/wake
+│   ├── NowPlayingMonitor.swift      # poll timer, cadence, sleep/wake, owns PlaybackClock
+│   ├── PlaybackClock.swift          # interpolates 1Hz poll position to 30-60Hz
 │   └── Track.swift
 ├── Artwork/
 │   ├── ArtworkLoader.swift          # cache → disk → network → placeholder
 │   └── PlaceholderLibrary.swift     # bundled + user-dropped placeholders
+├── Lyrics/
+│   ├── LyricsStore.swift            # indexes ~/Music/Lyrics/, matches id → artist-title → title
+│   ├── LyricsLibrary.swift          # local match → network fetch → cache; nil is not an error
+│   ├── LyricsFetcher.swift          # fallback fetch from lrclib.net (free, keyless)
+│   ├── LyricsSyncSettings.swift     # persisted manual offset applied before line lookup
+│   ├── LRCParser.swift              # .lrc → LyricsDocument, standard + word-level (enhanced) LRC
+│   ├── LyricsColumnView.swift       # the synced lyrics column: active line bright, scroll, word fill
+│   └── WordFill.swift               # karaoke-style fill progress within the active line
+├── Wallpaper/
+│   └── WallpaperSetter.swift        # unused; writes artwork to a stable file per NSScreen
 └── Spike/
-    ├── SelfTest.swift               # deterministic tests: parsing + error mapping
+    ├── SelfTest.swift               # deterministic tests: parsing, clock, LRC, matching, settings, errors
     ├── PollBench.swift              # poll cost measurement
-    └── ArtworkBench.swift           # artwork pipeline acceptance harness
+    ├── ArtworkBench.swift           # artwork pipeline acceptance harness
+    └── LyricsBench.swift            # lyrics pipeline acceptance harness (live current track)
 
 Resources/
 └── Placeholders/
@@ -132,7 +180,22 @@ Resources/
 
 This started as a desktop-overlay clone of a Spotify "now playing" widget — a click-through
 window drawn at desktop level with an animated platter/tonearm, artwork, and synced lyrics,
-plus a dev window-mode with two extra debug scenes. That was scrapped in favor of the much
-smaller feature described above: no window, no motion, no lyrics — just Spotify → the real
-desktop wallpaper. The `git` history's first commit is a snapshot of the overlay version, if
-any of that is ever worth resurrecting.
+plus a dev window-mode with two extra debug scenes. That was scrapped in favor of a much
+smaller feature: no window, no motion, no lyrics — just Spotify → the real desktop
+wallpaper (baseline commit `76708d3`, "Baseline snapshot before wallpaper-only rewrite").
+
+That wallpaper-only design was itself short-lived: the desktop-level window, the artwork +
+title layout, and synced lyrics were restored from `76708d3`, while the turntable/platter
+scene and its physics/animation code stayed retired. `WallpaperSetter` is kept on disk,
+unused, in case a wallpaper-replacement mode is ever wanted as an option alongside the
+overlay.
+
+The restored layout then went through a second round of tuning: the original full-width
+centered lyrics column was too large for a "just a small overlay, not a wallpaper
+takeover" ask, so it shrank to a small badge with a bounded lyrics box; a fixed-position
+layout turned into user-adjustable `OverlaySettings` (center or any corner, via the menu
+bar) once corner and center placement both needed testing; and lyrics gained a network
+fallback (`LyricsFetcher`, lrclib.net) plus a manual `LyricsSyncSettings` offset once
+manually curating `.lrc` files per track — and living with whatever timing bias the
+fetched file happened to have — proved to be the actual friction, not the lyrics feature
+itself.

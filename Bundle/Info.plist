@@ -29,6 +29,6 @@
 
 	<!-- Shown verbatim in the Automation TCC prompt. -->
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Turntable reads the current track from Spotify and sets its album artwork as your desktop wallpaper.</string>
+	<string>Turntable reads the current track from Spotify to show its artwork and synced lyrics on your desktop.</string>
 </dict>
 </plist>

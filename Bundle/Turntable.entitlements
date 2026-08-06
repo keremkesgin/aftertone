@@ -7,7 +7,7 @@
 	<key>com.apple.security.automation.apple-events</key>
 	<true/>
 
-	<!-- App Sandbox is deliberately off: direct distribution, and setting the desktop
-	     wallpaper via NSWorkspace is simplest unsandboxed. -->
+	<!-- App Sandbox is deliberately off: direct distribution, and the sandbox blocks
+	     AppleScript automation of Spotify, which polling for now-playing state depends on. -->
 </dict>
 </plist>
