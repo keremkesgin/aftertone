@@ -1,25 +1,42 @@
 import AppKit
 import Combine
 
-/// The only UI: a menu bar item showing what's playing (or why not), a lyrics sync-offset
-/// nudge, a screen-position submenu, and Quit.
+/// The only UI: a menu bar item showing what's playing (or why not), a screen-position
+/// submenu, a display-picker submenu, lyrics visibility + sync-offset controls, and Quit.
+///
+/// `NSObject` subclass (not a plain Swift class, unlike everything else in this app) is
+/// required here specifically: `NSMenuDelegate` inherits from `NSObjectProtocol`, and the
+/// display submenu needs that delegate to rebuild itself against whatever monitors are
+/// actually connected each time it's opened, rather than a snapshot taken once at launch.
 @MainActor
-final class StatusItemController {
+final class StatusItemController: NSObject {
     private let statusItem: NSStatusItem
     private let monitor: NowPlayingMonitor
     private let lyricsSyncSettings: LyricsSyncSettings
+    private let lyricsVisibility: LyricsVisibilitySettings
     private let overlaySettings: OverlaySettings
+    private let displaySettings: DisplaySettings
     private var cancellables: [AnyCancellable] = []
 
     private let nowPlayingItem = NSMenuItem()
     private let syncOffsetItem = NSMenuItem()
+    private let showLyricsItem = NSMenuItem()
+    private let displayMenu = NSMenu()
     private var positionItems: [OverlayPosition: NSMenuItem] = [:]
 
-    init(monitor: NowPlayingMonitor, lyricsSyncSettings: LyricsSyncSettings, overlaySettings: OverlaySettings) {
+    init(
+        monitor: NowPlayingMonitor, lyricsSyncSettings: LyricsSyncSettings,
+        lyricsVisibility: LyricsVisibilitySettings, overlaySettings: OverlaySettings,
+        displaySettings: DisplaySettings
+    ) {
         self.monitor = monitor
         self.lyricsSyncSettings = lyricsSyncSettings
+        self.lyricsVisibility = lyricsVisibility
         self.overlaySettings = overlaySettings
+        self.displaySettings = displaySettings
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        super.init()
+
         statusItem.button?.image = NSImage(
             systemSymbolName: "circle.grid.cross", accessibilityDescription: "Turntable")
 
@@ -28,10 +45,20 @@ final class StatusItemController {
         menu.addItem(.separator())
 
         let positionItem = NSMenuItem(title: "Position", action: nil, keyEquivalent: "")
-        positionItem.submenu = Self.makePositionMenu(target: self, items: &positionItems)
+        positionItem.submenu = makePositionMenu()
         menu.addItem(positionItem)
 
+        let displayItem = NSMenuItem(title: "Display", action: nil, keyEquivalent: "")
+        displayMenu.delegate = self
+        displayItem.submenu = displayMenu
+        menu.addItem(displayItem)
+
         menu.addItem(.separator())
+
+        showLyricsItem.title = "Show Lyrics"
+        showLyricsItem.action = #selector(toggleLyricsVisibility)
+        showLyricsItem.target = self
+        menu.addItem(showLyricsItem)
 
         syncOffsetItem.isEnabled = false
         menu.addItem(syncOffsetItem)
@@ -65,29 +92,29 @@ final class StatusItemController {
         cancellables.append(lyricsSyncSettings.$offset.sink { [weak self] _ in
             self?.refreshSyncOffsetLabel()
         })
+        cancellables.append(lyricsVisibility.$isEnabled.sink { [weak self] _ in
+            self?.refreshLyricsVisibilityCheckmark()
+        })
         cancellables.append(overlaySettings.$position.sink { [weak self] _ in
             self?.refreshPositionCheckmarks()
         })
         refresh()
         refreshSyncOffsetLabel()
+        refreshLyricsVisibilityCheckmark()
         refreshPositionCheckmarks()
     }
 
-    /// Built once at init: one checkable item per `OverlayPosition`, in display order.
-    /// `items` is filled in as an out-param so the caller can update checkmarks later
-    /// without walking the submenu back apart.
-    private static func makePositionMenu(
-        target: StatusItemController, items: inout [OverlayPosition: NSMenuItem]
-    ) -> NSMenu {
+    /// One checkable item per `OverlayPosition`, in display order. Unlike the display
+    /// submenu, the set of positions never changes at runtime, so this is built once.
+    private func makePositionMenu() -> NSMenu {
         let submenu = NSMenu()
         for position in OverlayPosition.allCases {
             let item = NSMenuItem(
-                title: position.displayName, action: #selector(StatusItemController.selectPosition(_:)),
-                keyEquivalent: "")
-            item.target = target
+                title: position.displayName, action: #selector(selectPosition(_:)), keyEquivalent: "")
+            item.target = self
             item.representedObject = position
             submenu.addItem(item)
-            items[position] = item
+            positionItems[position] = item
         }
         return submenu
     }
@@ -131,9 +158,23 @@ final class StatusItemController {
         }
     }
 
+    private func refreshLyricsVisibilityCheckmark() {
+        showLyricsItem.state = lyricsVisibility.isEnabled ? .on : .off
+    }
+
     @objc private func selectPosition(_ sender: NSMenuItem) {
         guard let position = sender.representedObject as? OverlayPosition else { return }
         overlaySettings.set(position)
+    }
+
+    @objc private func toggleLyricsVisibility() {
+        lyricsVisibility.toggle()
+    }
+
+    /// `nil` represented object means "Main Display" — follow whatever macOS reports as
+    /// main, rather than pinning to one that could later become disconnected.
+    @objc private func selectDisplay(_ sender: NSMenuItem) {
+        displaySettings.set(sender.representedObject as? String)
     }
 
     @objc private func nudgeEarlier() {
@@ -154,5 +195,34 @@ final class StatusItemController {
 
     @objc private func quit() {
         NSApplication.shared.terminate(nil)
+    }
+}
+
+extension StatusItemController: NSMenuDelegate {
+    /// Rebuilds the Display submenu against whatever's connected *right now*, every time
+    /// it's about to open — monitors get plugged and unplugged far more often over an
+    /// app's lifetime than the fixed set of `OverlayPosition` cases ever changes, so this
+    /// can't be a one-time build like `makePositionMenu()`.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === displayMenu else { return }
+        menu.removeAllItems()
+
+        let mainItem = NSMenuItem(title: "Main Display", action: #selector(selectDisplay(_:)), keyEquivalent: "")
+        mainItem.target = self
+        mainItem.representedObject = nil as String?
+        mainItem.state = displaySettings.screenName == nil ? .on : .off
+        menu.addItem(mainItem)
+
+        let screens = NSScreen.screens
+        guard screens.count > 1 else { return }
+        menu.addItem(.separator())
+        for screen in screens {
+            let name = screen.localizedName
+            let item = NSMenuItem(title: name, action: #selector(selectDisplay(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = name
+            item.state = displaySettings.screenName == name ? .on : .off
+            menu.addItem(item)
+        }
     }
 }

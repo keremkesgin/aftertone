@@ -12,6 +12,7 @@ struct DesktopContentView: View {
     @ObservedObject var artwork: ArtworkLoader
     @ObservedObject var lyrics: LyricsLibrary
     @ObservedObject var lyricsSyncSettings: LyricsSyncSettings
+    @ObservedObject var lyricsVisibility: LyricsVisibilitySettings
     @ObservedObject var overlaySettings: OverlaySettings
 
     private static let artworkSize: CGFloat = 140
@@ -27,7 +28,7 @@ struct DesktopContentView: View {
                 badge(for: track)
             }
 
-            if let document = lyrics.document {
+            if lyricsVisibility.isEnabled, let document = lyrics.document {
                 LyricsColumnView(monitor: monitor, syncSettings: lyricsSyncSettings, document: document)
                     .frame(width: Self.lyricsWidth, height: Self.lyricsHeight)
             }

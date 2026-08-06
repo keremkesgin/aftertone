@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// Deterministic tests for the parse boundary, error mapping, the playback clock, and
@@ -27,6 +28,8 @@ enum SelfTest {
         lyricsFetcherRequestURL()
         lyricsSyncSettings()
         overlaySettings()
+        lyricsVisibilitySettings()
+        displaySettings()
 
         print("")
         if failures.isEmpty {
@@ -520,6 +523,62 @@ enum SelfTest {
         defaults.set("diagonal", forKey: "dev.kesgin.Turntable.overlayPosition")
         let corrupted = OverlaySettings(defaults: defaults)
         expectEqual(corrupted.position, .center, "an unrecognized stored value falls back to center")
+    }
+
+    // MARK: - LyricsVisibilitySettings
+
+    private static func lyricsVisibilitySettings() {
+        print("lyrics visibility settings")
+
+        let defaults = Self.ephemeralDefaults()
+        let settings = LyricsVisibilitySettings(defaults: defaults)
+        expectEqual(settings.isEnabled, true, "defaults to enabled with nothing stored")
+
+        settings.toggle()
+        expectEqual(settings.isEnabled, false, "toggle flips to disabled")
+
+        let reloaded = LyricsVisibilitySettings(defaults: defaults)
+        expectEqual(reloaded.isEnabled, false, "a new instance loads the persisted value")
+
+        settings.toggle()
+        expectEqual(settings.isEnabled, true, "toggling again flips back to enabled")
+    }
+
+    // MARK: - DisplaySettings
+
+    private static func displaySettings() {
+        print("display settings")
+
+        let defaults = Self.ephemeralDefaults()
+        let settings = DisplaySettings(defaults: defaults)
+        expectEqual(settings.screenName, nil, "defaults to nil (follow main) with nothing stored")
+
+        settings.set("DELL U2720Q")
+        expectEqual(settings.screenName, "DELL U2720Q", "set updates the published name")
+
+        let reloaded = DisplaySettings(defaults: defaults)
+        expectEqual(reloaded.screenName, "DELL U2720Q", "a new instance loads the persisted name")
+
+        settings.set(nil)
+        expectEqual(settings.screenName, nil, "set(nil) clears back to \"follow main\"")
+        expect(defaults.string(forKey: "dev.kesgin.Turntable.displayName") == nil,
+               "set(nil) removes the stored key rather than storing an empty string")
+
+        // Matching against a live screen exercises the actual comparison this app relies
+        // on, without asserting anything about hardware this test doesn't control.
+        if let liveScreen = NSScreen.screens.first {
+            settings.set(liveScreen.localizedName)
+            expectEqual(settings.resolveScreen(from: [liveScreen])?.localizedName, liveScreen.localizedName,
+                        "a name matching a connected screen resolves to that screen")
+        } else {
+            print("  (skipped live-screen match: no screens reported)")
+        }
+
+        // A name that matches nothing currently connected (monitor unplugged) must not
+        // strand the resolution — fall back to main rather than nil.
+        settings.set("Some Monitor That Definitely Is Not Connected")
+        expectEqual(settings.resolveScreen(from: NSScreen.screens)?.frame, NSScreen.main?.frame,
+                    "an unmatched stored name falls back to the main screen")
     }
 
     /// A `UserDefaults` suite scoped to this test run only — never touches the real

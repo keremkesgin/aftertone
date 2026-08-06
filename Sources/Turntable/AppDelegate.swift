@@ -17,17 +17,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let lyricsStore = LyricsStore()
     private lazy var lyrics = LyricsLibrary(store: lyricsStore)
     private let lyricsSyncSettings = LyricsSyncSettings()
+    private let lyricsVisibility = LyricsVisibilitySettings()
     private let overlaySettings = OverlaySettings()
+    private let displaySettings = DisplaySettings()
 
     private var desktopWindow: DesktopWindow?
     private var statusItemController: StatusItemController?
     private var screenParameterObserver: NSObjectProtocol?
+    private var displaySettingsCancellable: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // No Dock icon, no Cmd-Tab entry — belt-and-suspenders with `LSUIElement`.
         NSApplication.shared.setActivationPolicy(.accessory)
 
-        let screenFrame = Self.currentScreenFrame()
+        let screenFrame = currentScreenFrame()
         let window = DesktopWindow(contentRect: screenFrame)
 
         // `NSHostingView` sizes itself to its SwiftUI content's *fitting* size the moment
@@ -38,7 +41,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // SwiftUI content itself (which wouldn't track a subsequent resize at all).
         let content = DesktopContentView(
             monitor: monitor, artwork: artwork, lyrics: lyrics,
-            lyricsSyncSettings: lyricsSyncSettings, overlaySettings: overlaySettings)
+            lyricsSyncSettings: lyricsSyncSettings, lyricsVisibility: lyricsVisibility,
+            overlaySettings: overlaySettings)
         let hostingView = NSHostingView(rootView: content)
         hostingView.frame = NSRect(origin: .zero, size: screenFrame.size)
         hostingView.autoresizingMask = [.width, .height]
@@ -53,9 +57,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.resizeToCurrentScreen() }
         }
+        // Picking a different display from the menu takes effect immediately, not on the
+        // next actual screen-configuration change.
+        displaySettingsCancellable = displaySettings.$screenName.sink { [weak self] _ in
+            self?.resizeToCurrentScreen()
+        }
 
         statusItemController = StatusItemController(
-            monitor: monitor, lyricsSyncSettings: lyricsSyncSettings, overlaySettings: overlaySettings)
+            monitor: monitor, lyricsSyncSettings: lyricsSyncSettings, lyricsVisibility: lyricsVisibility,
+            overlaySettings: overlaySettings, displaySettings: displaySettings)
 
         monitor.start()
     }
@@ -76,10 +86,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let window = desktopWindow else { return }
         // The content view's `[.width, .height]` autoresizing mask handles propagating
         // this to the SwiftUI content — no separate content-view resize needed.
-        window.setFrame(Self.currentScreenFrame(), display: true)
+        window.setFrame(currentScreenFrame(), display: true)
     }
 
-    private static func currentScreenFrame() -> NSRect {
-        NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
+    private func currentScreenFrame() -> NSRect {
+        displaySettings.resolveScreen()?.frame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
     }
 }
