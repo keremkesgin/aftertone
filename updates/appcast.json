@@ -1,0 +1,7 @@
+{
+  "version": "0.2.0",
+  "build": 2,
+  "url": "https://github.com/keremkesgin/aftertone/releases/download/v0.2.0/Aftertone.zip",
+  "sha256Signature": "EyHJ6icQ4cFbtzU4WyuXT65z6y+YOOiAt8K0L4lzR3CCQJv2WbPQNDRiPMPTNtKamcsw3HDk4at6A/jAt1S1BA==",
+  "notes": "First public release as Aftertone: Gradient Wallpaper mode, Vinyl Mode, Theme Glow, multi-display support, and a self-updater."
+}
