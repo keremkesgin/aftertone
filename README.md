@@ -15,9 +15,11 @@ sounds like something.
 </div>
 
 <p align="center">
-  <img src="docs/screenshots/gradient-wallpaper.png" width="32%" alt="Gradient Wallpaper mode showing a red-to-black gradient derived from an album cover">
-  <img src="docs/screenshots/synced-lyrics.png" width="32%" alt="Synced, glowing lyrics over a purple gradient wallpaper">
-  <img src="docs/screenshots/vinyl-mode.png" width="32%" alt="Vinyl Mode showing album art and a spinning record next to it">
+  <img src="docs/screenshots/gradient-wallpaper.png" width="48%" alt="Gradient Wallpaper mode showing a red-to-black gradient derived from an album cover">
+  <img src="docs/screenshots/synced-lyrics.png" width="48%" alt="Synced, glowing lyrics over a purple gradient wallpaper">
+</p>
+<p align="center">
+  <img src="docs/screenshots/vinyl-mode.png" width="48%" alt="Vinyl Mode showing album art and a spinning record next to it">
 </p>
 
 <p align="center">
