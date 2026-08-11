@@ -53,18 +53,37 @@ final class WallpaperSetter {
 
     /// Puts back whatever wallpaper each screen had before the first gradient was
     /// applied, then forgets it. Safe to call repeatedly — a no-op with nothing stored.
+    ///
+    /// The saved record is only cleared once every screen it names has actually been
+    /// restored. `setDesktopImageURL` can throw — a dynamic/`.heic` desktop picture is a
+    /// known case where this API is finicky — and silently swallowing that with `try?`
+    /// while still deleting the recovery data would burn the user's one chance to get
+    /// their real wallpaper back: the next attempt (another toggle, or quit) would find
+    /// nothing left to restore from. Keeping the record on any failure means the next
+    /// call gets another shot instead of a permanently lost original.
     func restoreOriginals() {
         guard let stored = defaults.dictionary(forKey: Self.originalsKey) as? [String: String] else {
             return
         }
+        var remaining = stored
         for screen in NSScreen.screens {
             guard let string = stored[screen.localizedName], let url = URL(string: string) else {
                 continue
             }
-            try? NSWorkspace.shared.setDesktopImageURL(url, for: screen, options: [:])
+            do {
+                try NSWorkspace.shared.setDesktopImageURL(url, for: screen, options: [:])
+                remaining.removeValue(forKey: screen.localizedName)
+            } catch {
+                NSLog("[Aftertone] Could not restore original wallpaper for %@: %@",
+                      screen.localizedName, error.localizedDescription)
+            }
         }
-        defaults.removeObject(forKey: Self.originalsKey)
-        lastAppliedID = nil
+        if remaining.isEmpty {
+            defaults.removeObject(forKey: Self.originalsKey)
+            lastAppliedID = nil
+        } else {
+            defaults.set(remaining, forKey: Self.originalsKey)
+        }
     }
 
     /// Captures the current per-screen wallpaper, once. Skips our own alternating files:
