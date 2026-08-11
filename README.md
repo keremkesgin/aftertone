@@ -1,23 +1,34 @@
-# Aftertone
+<div align="center">
 
-**Your desktop, tuned to whatever's playing.**
+# 🎧 Aftertone
 
-Aftertone is a tiny macOS menu-bar app that mirrors what's playing in the **Spotify
-desktop client** onto your desktop — album art, title/artist, and synced lyrics, rendered
-above your wallpaper and below your icons. Turn on **Gradient Wallpaper** and it goes
-further: your entire desktop becomes a smooth gradient pulled straight from the album
-cover's colors, recomputed on every track change.
+### *The color of what you're listening to, left glowing on your desktop.*
 
-No Dock icon, no windows to manage, no lock-in to a single look — just a menu bar item.
+Every album has a mood. Aftertone lifts it straight off the cover and lets it fill your
+screen — a gradient that shifts with the music, lyrics that glow in time with the words,
+art that never sits still. Your desktop stops being wallpaper and starts being the room
+the song is playing in.
+
+No windows. No Dock icon. No clutter. Just a menu bar icon — and a desktop that finally
+sounds like something.
+
+</div>
 
 <p align="center">
-  <img src="docs/screenshots/vinyl-mode.png" width="49%" alt="Vinyl Mode showing album art and a spinning record next to it">
-  <img src="docs/screenshots/gradient-wallpaper.png" width="49%" alt="Gradient Wallpaper mode showing a red-to-black gradient derived from an album cover">
+  <img src="docs/screenshots/gradient-wallpaper.png" width="32%" alt="Gradient Wallpaper mode showing a red-to-black gradient derived from an album cover">
+  <img src="docs/screenshots/synced-lyrics.png" width="32%" alt="Synced, glowing lyrics over a purple gradient wallpaper">
+  <img src="docs/screenshots/vinyl-mode.png" width="32%" alt="Vinyl Mode showing album art and a spinning record next to it">
 </p>
+
+<p align="center">
 
 [![Download latest release](https://img.shields.io/github/v/release/keremkesgin/aftertone?label=Download&style=for-the-badge&color=1DB954)](https://github.com/keremkesgin/aftertone/releases/latest)
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-black?style=for-the-badge)
 ![Swift](https://img.shields.io/badge/Swift-5.9-orange?style=for-the-badge)
+
+</p>
+
+---
 
 ## Features
 
