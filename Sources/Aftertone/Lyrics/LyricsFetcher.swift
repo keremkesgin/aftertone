@@ -21,7 +21,7 @@ struct LyricsFetcher {
         var request = URLRequest(url: url)
         // lrclib.net asks integrations to identify themselves with a descriptive
         // User-Agent rather than an API key.
-        request.setValue("Turntable (macOS desktop lyrics overlay)", forHTTPHeaderField: "User-Agent")
+        request.setValue("Aftertone (macOS desktop lyrics overlay)", forHTTPHeaderField: "User-Agent")
 
         guard let (data, response) = try? await session.data(for: request),
               let http = response as? HTTPURLResponse, http.statusCode == 200,

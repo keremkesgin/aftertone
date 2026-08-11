@@ -3,9 +3,9 @@ import Combine
 import SwiftUI
 
 /// Owns the app's lifecycle: polls Spotify, resolves artwork and lyrics, and renders them
-/// in a click-through window at desktop level. The user's actual wallpaper is never
-/// touched — `WallpaperSetter` is unused here, kept on disk in case wallpaper mode is
-/// ever brought back as an option.
+/// in a click-through window at desktop level. The user's actual wallpaper is only
+/// touched when gradient wallpaper mode is on — see the `WallpaperSetter` wiring below —
+/// and is restored on toggle-off and on quit.
 ///
 /// Deliberately not a SwiftUI `App`/`Scene`: SwiftUI's `Window` scene has no way to set a
 /// custom `NSWindow.level`, and a custom level is the entire mechanism this app depends on
@@ -20,11 +20,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let lyricsVisibility = LyricsVisibilitySettings()
     private let overlaySettings = OverlaySettings()
     private let displaySettings = DisplaySettings()
+    private let glowSettings = AlbumGlowSettings()
+    private let vinylModeSettings = VinylModeSettings()
+    private let gradientWallpaperSettings = GradientWallpaperSettings()
+    private let wallpaperSetter = WallpaperSetter()
+    private let updateChecker = UpdateChecker()
 
     private var desktopWindow: DesktopWindow?
     private var statusItemController: StatusItemController?
     private var screenParameterObserver: NSObjectProtocol?
     private var displaySettingsCancellable: AnyCancellable?
+    private var gradientWallpaperCancellable: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // No Dock icon, no Cmd-Tab entry — belt-and-suspenders with `LSUIElement`.
@@ -42,7 +48,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let content = DesktopContentView(
             monitor: monitor, artwork: artwork, lyrics: lyrics,
             lyricsSyncSettings: lyricsSyncSettings, lyricsVisibility: lyricsVisibility,
-            overlaySettings: overlaySettings)
+            overlaySettings: overlaySettings, glowSettings: glowSettings, vinylModeSettings: vinylModeSettings,
+            gradientWallpaperSettings: gradientWallpaperSettings)
         let hostingView = NSHostingView(rootView: content)
         hostingView.frame = NSRect(origin: .zero, size: screenFrame.size)
         hostingView.autoresizingMask = [.width, .height]
@@ -58,16 +65,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated { self?.resizeToCurrentScreen() }
         }
         // Picking a different display from the menu takes effect immediately, not on the
-        // next actual screen-configuration change.
-        displaySettingsCancellable = displaySettings.$screenName.sink { [weak self] _ in
-            self?.resizeToCurrentScreen()
+        // next actual screen-configuration change. Resolves the *emitted* name, not the
+        // stored property — `@Published` emits on `willSet`, so reading the property
+        // here would resize to the previously selected display, one pick behind.
+        displaySettingsCancellable = displaySettings.$screenName.sink { [weak self] name in
+            guard let self, let window = self.desktopWindow else { return }
+            let frame = DisplaySettings.resolveScreen(named: name)?.frame
+                ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
+            window.setFrame(frame, display: true)
         }
+
+        // The in-window gradient can't reach the menu bar: its legibility scrim samples
+        // the wallpaper *file* macOS has on record, not what's drawn behind it. Mirror
+        // the gradient onto the real wallpaper so the scrim inherits the dark top, and
+        // put the user's own wallpaper back the moment the mode goes off.
+        //
+        // CombineLatest, not `artwork.palette` read inside the sink: `@Published` emits
+        // on `willSet`, so at the moment `$state` fires the `palette` *property* still
+        // holds the previous track's colors — the emitted values are the only pair that
+        // is guaranteed consistent.
+        gradientWallpaperCancellable = Publishers
+            .CombineLatest3(artwork.$state, artwork.$palette, gradientWallpaperSettings.$isEnabled)
+            .sink { [weak self] state, palette, isEnabled in
+                guard let self else { return }
+                if isEnabled, let state, !state.isPlaceholder {
+                    self.wallpaperSetter.applyGradient(palette: palette, id: state.id)
+                } else if !isEnabled {
+                    self.wallpaperSetter.restoreOriginals()
+                }
+            }
 
         statusItemController = StatusItemController(
             monitor: monitor, lyricsSyncSettings: lyricsSyncSettings, lyricsVisibility: lyricsVisibility,
-            overlaySettings: overlaySettings, displaySettings: displaySettings)
+            overlaySettings: overlaySettings, displaySettings: displaySettings, glowSettings: glowSettings,
+            vinylModeSettings: vinylModeSettings, gradientWallpaperSettings: gradientWallpaperSettings,
+            updateChecker: updateChecker)
 
         monitor.start()
+
+        // One silent check per launch — a menu-bar utility that nags on every poll
+        // would be worse than an app that's occasionally a version behind.
+        updateChecker.checkSilently()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Quitting removes the overlay, so a still-applied gradient would strand the
+        // user on a wallpaper they never picked, with the app that made it gone.
+        wallpaperSetter.restoreOriginals()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

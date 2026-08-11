@@ -1,7 +1,11 @@
-APP_NAME    := Turntable
+# BUNDLE_ID stays on the original identifier deliberately: it's what macOS uses to key
+# the Automation (TCC) grant and every persisted UserDefaults key, and changing it would
+# silently reset both for anyone upgrading from an earlier Turntable build. Only the
+# user-visible name changed to Aftertone.
+APP_NAME    := Aftertone
 BUNDLE_ID   := dev.kesgin.Turntable
-VERSION     := 0.1.0
-BUILD_NUM   := 1
+VERSION     := 0.2.0
+BUILD_NUM   := 2
 CONFIG      := debug
 
 BUILD_DIR   := build
@@ -30,6 +34,7 @@ bundle: build
 	     -e 's|__BUILD__|$(BUILD_NUM)|' \
 	     Bundle/Info.plist > "$(CONTENTS)/Info.plist"
 	@printf 'APPL????' > "$(CONTENTS)/PkgInfo"
+	@cp Bundle/AppIcon.icns "$(CONTENTS)/Resources/AppIcon.icns"
 	@if [ -d Resources ]; then \
 	    /usr/bin/rsync -a --exclude='.gitkeep' --exclude='.DS_Store' Resources/ "$(CONTENTS)/Resources/"; \
 	fi

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import SwiftUI
 
 /// Deterministic tests for the parse boundary, error mapping, the playback clock, and
 /// lyrics parsing/matching.
@@ -30,6 +31,10 @@ enum SelfTest {
         overlaySettings()
         lyricsVisibilitySettings()
         displaySettings()
+        artworkPalette()
+        albumGlowSettings()
+        vinylModeSettings()
+        gradientWallpaper()
 
         print("")
         if failures.isEmpty {
@@ -575,10 +580,10 @@ enum SelfTest {
         }
 
         // A name that matches nothing currently connected (monitor unplugged) must not
-        // strand the resolution — fall back to main rather than nil.
+        // strand the resolution — fall back to the primary display rather than nil.
         settings.set("Some Monitor That Definitely Is Not Connected")
-        expectEqual(settings.resolveScreen(from: NSScreen.screens)?.frame, NSScreen.main?.frame,
-                    "an unmatched stored name falls back to the main screen")
+        expectEqual(settings.resolveScreen(from: NSScreen.screens)?.frame, NSScreen.screens.first?.frame,
+                    "an unmatched stored name falls back to the primary display, not focus-based .main")
     }
 
     /// A `UserDefaults` suite scoped to this test run only — never touches the real
@@ -586,5 +591,147 @@ enum SelfTest {
     /// to, and needs no cleanup since it's never written to disk under a stable name.
     private static func ephemeralDefaults() -> UserDefaults {
         UserDefaults(suiteName: "SelfTest-\(UUID().uuidString)") ?? .standard
+    }
+
+    // MARK: - ArtworkPalette
+
+    private static func artworkPalette() {
+        print("artwork palette")
+
+        // Half red, half blue. Deliberately doesn't assert which array index gets which
+        // color — that depends on a CGContext coordinate-flip detail this test has no
+        // reason to pin down — only that regional variation survives band averaging
+        // instead of blending into one flat gray-purple.
+        let size = NSSize(width: 32, height: 32)
+        let image = NSImage(size: size)
+        image.lockFocus()
+        NSColor.red.setFill()
+        NSRect(x: 0, y: 16, width: 32, height: 16).fill()
+        NSColor.blue.setFill()
+        NSRect(x: 0, y: 0, width: 32, height: 16).fill()
+        image.unlockFocus()
+
+        let palette = ArtworkPalette.extract(from: image, bands: 2)
+        expectEqual(palette.colors.count, 2, "two bands produce two colors")
+
+        func components(_ color: Color) -> (r: Double, g: Double, b: Double) {
+            let resolved = NSColor(color).usingColorSpace(.deviceRGB) ?? NSColor(color)
+            return (resolved.redComponent, resolved.greenComponent, resolved.blueComponent)
+        }
+        let bands = palette.colors.map(components)
+
+        expect(bands.contains { $0.r > 0.8 && $0.b < 0.2 }, "one band is predominantly red")
+        expect(bands.contains { $0.b > 0.8 && $0.r < 0.2 }, "the other band is predominantly blue")
+        expect(abs(bands[0].r - bands[1].r) > 0.5,
+               "the two bands are distinct, not blended into one flat average")
+
+        // A degenerate image must not crash and must still return a usable palette.
+        let tiny = NSImage(size: NSSize(width: 1, height: 1))
+        expect(!ArtworkPalette.extract(from: tiny).colors.isEmpty,
+               "a 1x1 image still returns a non-empty palette, not a crash")
+    }
+
+    // MARK: - AlbumGlowSettings
+
+    private static func albumGlowSettings() {
+        print("album glow settings")
+
+        let defaults = Self.ephemeralDefaults()
+        let settings = AlbumGlowSettings(defaults: defaults)
+        expectEqual(settings.isEnabled, false, "defaults to disabled with nothing stored")
+        expectEqual(settings.sizeScale, 1.0, "defaults to 100% size with nothing stored")
+
+        settings.toggle()
+        expectEqual(settings.isEnabled, true, "toggle flips to enabled")
+
+        settings.increaseSize()
+        expectClose(settings.sizeScale, 1.15, 0.001, "one increase-step is +0.15")
+        settings.decreaseSize()
+        settings.decreaseSize()
+        expectClose(settings.sizeScale, 0.85, 0.001, "decrease steps subtract the same amount")
+
+        settings.resetSize()
+        expectEqual(settings.sizeScale, 1.0, "reset returns to 100%")
+
+        // Clamping, same reasoning as LyricsSyncSettings: a stuck key must not produce a
+        // scale nobody could explain from the menu.
+        for _ in 0..<50 { settings.increaseSize() }
+        expectEqual(settings.sizeScale, AlbumGlowSettings.sizeRange.upperBound, "increasing clamps at the upper bound")
+        for _ in 0..<50 { settings.decreaseSize() }
+        expectEqual(settings.sizeScale, AlbumGlowSettings.sizeRange.lowerBound, "decreasing clamps at the lower bound")
+
+        let reloaded = AlbumGlowSettings(defaults: defaults)
+        expectEqual(reloaded.isEnabled, true, "a new instance loads the persisted enabled state")
+        expectEqual(reloaded.sizeScale, AlbumGlowSettings.sizeRange.lowerBound,
+                    "a new instance loads the persisted size")
+
+        // An out-of-range stored value (older build's range, or corruption) must fall
+        // back to the default rather than silently clamping in a value the user never
+        // actually chose.
+        defaults.set(999.0, forKey: "dev.kesgin.Turntable.albumGlowSizeScale")
+        let corrupted = AlbumGlowSettings(defaults: defaults)
+        expectEqual(corrupted.sizeScale, 1.0, "an out-of-range stored size is rejected, not clamped in")
+    }
+
+    // MARK: - VinylModeSettings
+
+    private static func vinylModeSettings() {
+        print("vinyl mode settings")
+
+        let defaults = Self.ephemeralDefaults()
+        let settings = VinylModeSettings(defaults: defaults)
+        expectEqual(settings.isEnabled, false, "defaults to disabled with nothing stored")
+
+        settings.toggle()
+        expectEqual(settings.isEnabled, true, "toggle flips to enabled")
+
+        let reloaded = VinylModeSettings(defaults: defaults)
+        expectEqual(reloaded.isEnabled, true, "a new instance loads the persisted value")
+
+        settings.toggle()
+        expectEqual(settings.isEnabled, false, "toggling again flips back to disabled")
+    }
+
+    // MARK: - Gradient wallpaper
+
+    private static func gradientWallpaper() {
+        print("gradient wallpaper")
+
+        let defaults = Self.ephemeralDefaults()
+        let settings = GradientWallpaperSettings(defaults: defaults)
+        expectEqual(settings.isEnabled, false, "defaults to disabled with nothing stored")
+
+        settings.toggle()
+        expectEqual(settings.isEnabled, true, "toggle flips to enabled")
+
+        let reloaded = GradientWallpaperSettings(defaults: defaults)
+        expectEqual(reloaded.isEnabled, true, "a new instance loads the persisted value")
+
+        // Stop derivation: a vivid palette should produce a dark→vivid→light sweep in
+        // the anchor's hue, not echo the raw band colors.
+        let vivid = ArtworkPalette(colors: [
+            Color(red: 0.9, green: 0.3, blue: 0.1),  // saturated orange — should anchor
+            Color(red: 0.4, green: 0.4, blue: 0.4),  // gray band, should lose
+        ])
+        let stops = GradientWallpaperView.stops(for: vivid)
+        expectEqual(stops.count, 3, "gradient always has three stops")
+
+        func brightness(_ color: Color) -> CGFloat {
+            var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            (NSColor(color).usingColorSpace(.sRGB) ?? .gray)
+                .getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+            return b
+        }
+        expect(brightness(stops[0].color) < 0.2, "first stop is near-black")
+        expect(brightness(stops[2].color) <= 0.9, "last stop stays a colored tint, not white")
+        expect(brightness(stops[0].color) < brightness(stops[1].color)
+               && brightness(stops[1].color) < brightness(stops[2].color),
+               "stops brighten monotonically along the diagonal")
+
+        // A grayscale palette must still derive without crashing and keep the sweep.
+        let gray = ArtworkPalette(colors: [Color(white: 0.5)])
+        let grayStops = GradientWallpaperView.stops(for: gray)
+        expect(brightness(grayStops[0].color) < brightness(grayStops[2].color),
+               "a grayscale palette still yields a dark-to-light gradient")
     }
 }

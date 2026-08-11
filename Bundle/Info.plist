@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>Turntable</string>
+	<string>Aftertone</string>
 	<key>CFBundleDisplayName</key>
-	<string>Turntable</string>
+	<string>Aftertone</string>
 	<key>CFBundleExecutable</key>
-	<string>Turntable</string>
+	<string>Aftertone</string>
 	<key>CFBundleIdentifier</key>
 	<string>__BUNDLE_ID__</string>
 	<key>CFBundlePackageType</key>
@@ -23,12 +23,15 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+
 	<!-- No Dock icon, no Cmd-Tab entry — the menu bar status item is the only UI. -->
 	<key>LSUIElement</key>
 	<true/>
 
 	<!-- Shown verbatim in the Automation TCC prompt. -->
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Turntable reads the current track from Spotify to show its artwork and synced lyrics on your desktop.</string>
+	<string>Aftertone reads the current track from Spotify to show its artwork and synced lyrics on your desktop.</string>
 </dict>
 </plist>

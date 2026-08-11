@@ -5,12 +5,12 @@ import PackageDescription
 // and `make app`. SwiftPM only produces the bare executable. This keeps Resources/ as
 // loose files inside Contents/Resources (spec §6.2) instead of an SPM resource bundle.
 let package = Package(
-    name: "Turntable",
+    name: "Aftertone",
     platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(
-            name: "Turntable",
-            path: "Sources/Turntable"
+            name: "Aftertone",
+            path: "Sources/Aftertone"
         )
     ]
 )

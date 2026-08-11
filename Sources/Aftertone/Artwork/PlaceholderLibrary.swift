@@ -69,11 +69,11 @@ final class PlaceholderLibrary {
 
         guard let data = try? Data(contentsOf: manifestURL) else { return [] }
         guard let manifest = try? JSONDecoder().decode(Manifest.self, from: data) else {
-            NSLog("[Turntable] Placeholders/manifest.json is malformed; ignoring it.")
+            NSLog("[Aftertone] Placeholders/manifest.json is malformed; ignoring it.")
             return []
         }
         guard manifest.version == 1 else {
-            NSLog("[Turntable] Placeholder manifest version %d is newer than this build understands.",
+            NSLog("[Aftertone] Placeholder manifest version %d is newer than this build understands.",
                   manifest.version)
             return []
         }
@@ -83,7 +83,7 @@ final class PlaceholderLibrary {
         return manifest.artworks.compactMap { entry in
             let url = directory.appendingPathComponent(entry.file)
             guard FileManager.default.fileExists(atPath: url.path) else {
-                NSLog("[Turntable] Placeholder '%@' names a missing file: %@", entry.id, entry.file)
+                NSLog("[Aftertone] Placeholder '%@' names a missing file: %@", entry.id, entry.file)
                 return nil
             }
             return Placeholder(

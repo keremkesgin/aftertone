@@ -19,6 +19,11 @@ struct ArtworkState: Equatable {
 @MainActor
 final class ArtworkLoader: ObservableObject {
     @Published private(set) var state: ArtworkState?
+    /// Colors sampled from `state.image` whenever it's real (non-placeholder) artwork —
+    /// feeds `AlbumGlowView`. Left stale rather than reset while a placeholder is
+    /// showing; the glow view hides itself based on `state.isPlaceholder` directly, so a
+    /// stale palette here is simply never drawn.
+    @Published private(set) var palette: ArtworkPalette = .placeholder
 
     private let library: PlaceholderLibrary
     private let session: URLSession
@@ -146,7 +151,7 @@ final class ArtworkLoader: ObservableObject {
     }
 
     private func recordFailure(_ url: URL, token: Int, reason: String) {
-        NSLog("[Turntable] Artwork fetch failed for %@: %@", url.absoluteString, reason)
+        NSLog("[Aftertone] Artwork fetch failed for %@: %@", url.absoluteString, reason)
         failedURLs.insert(url)
         guard token == generation else { return }
         showPlaceholder()
@@ -157,6 +162,7 @@ final class ArtworkLoader: ObservableObject {
     private func show(_ image: NSImage, id: String) {
         guard state?.id != id else { return }
         state = ArtworkState(image: image, id: id, isPlaceholder: false, labelTint: nil)
+        palette = ArtworkPalette.extract(from: image)
     }
 
     private func showPlaceholder() {
@@ -170,7 +176,7 @@ final class ArtworkLoader: ObservableObject {
         }
         guard state?.id != placeholder.id else { return }
         guard let image = NSImage(contentsOf: placeholder.url) else {
-            NSLog("[Turntable] Placeholder '%@' could not be decoded.", placeholder.id)
+            NSLog("[Aftertone] Placeholder '%@' could not be decoded.", placeholder.id)
             return
         }
         state = ArtworkState(image: image, id: placeholder.id,
