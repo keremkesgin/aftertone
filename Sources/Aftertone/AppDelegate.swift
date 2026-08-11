@@ -3,9 +3,13 @@ import Combine
 import SwiftUI
 
 /// Owns the app's lifecycle: polls Spotify, resolves artwork and lyrics, and renders them
-/// in a click-through window at desktop level. The user's actual wallpaper is only
-/// touched when gradient wallpaper mode is on — see the `WallpaperSetter` wiring below —
-/// and is restored on toggle-off and on quit.
+/// in a click-through window at desktop level. The user's actual wallpaper is never
+/// touched — `WallpaperSetter` is unused here, kept on disk for testing: gradient mode's
+/// real-wallpaper mirroring (which fixes the menu bar scrim showing a pale band — see
+/// `GradientWallpaperView`'s doc comment) is disabled while a wallpaper-restore issue is
+/// being tested against, so the in-window gradient is the only visible effect again, same
+/// as before that mirroring existed. Re-wire the block in `applicationDidFinishLaunching`
+/// (and the `restoreOriginals()` call in `applicationWillTerminate`) to bring it back.
 ///
 /// Deliberately not a SwiftUI `App`/`Scene`: SwiftUI's `Window` scene has no way to set a
 /// custom `NSWindow.level`, and a custom level is the entire mechanism this app depends on
@@ -75,25 +79,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.setFrame(frame, display: true)
         }
 
-        // The in-window gradient can't reach the menu bar: its legibility scrim samples
-        // the wallpaper *file* macOS has on record, not what's drawn behind it. Mirror
-        // the gradient onto the real wallpaper so the scrim inherits the dark top, and
-        // put the user's own wallpaper back the moment the mode goes off.
+        // Real-wallpaper mirroring disabled for now — see the class doc comment above.
+        // The commented block is exactly what to restore to bring it back:
         //
-        // CombineLatest, not `artwork.palette` read inside the sink: `@Published` emits
-        // on `willSet`, so at the moment `$state` fires the `palette` *property* still
-        // holds the previous track's colors — the emitted values are the only pair that
-        // is guaranteed consistent.
-        gradientWallpaperCancellable = Publishers
-            .CombineLatest3(artwork.$state, artwork.$palette, gradientWallpaperSettings.$isEnabled)
-            .sink { [weak self] state, palette, isEnabled in
-                guard let self else { return }
-                if isEnabled, let state, !state.isPlaceholder {
-                    self.wallpaperSetter.applyGradient(palette: palette, id: state.id)
-                } else if !isEnabled {
-                    self.wallpaperSetter.restoreOriginals()
-                }
-            }
+        // gradientWallpaperCancellable = Publishers
+        //     .CombineLatest3(artwork.$state, artwork.$palette, gradientWallpaperSettings.$isEnabled)
+        //     .sink { [weak self] state, palette, isEnabled in
+        //         guard let self else { return }
+        //         if isEnabled, let state, !state.isPlaceholder {
+        //             self.wallpaperSetter.applyGradient(palette: palette, id: state.id)
+        //         } else if !isEnabled {
+        //             self.wallpaperSetter.restoreOriginals()
+        //         }
+        //     }
 
         statusItemController = StatusItemController(
             monitor: monitor, lyricsSyncSettings: lyricsSyncSettings, lyricsVisibility: lyricsVisibility,
@@ -109,9 +107,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        // Quitting removes the overlay, so a still-applied gradient would strand the
-        // user on a wallpaper they never picked, with the app that made it gone.
-        wallpaperSetter.restoreOriginals()
+        // No-op while wallpaper mirroring is disabled — see the class doc comment.
+        // Restore with: wallpaperSetter.restoreOriginals()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
