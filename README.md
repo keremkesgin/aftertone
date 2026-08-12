@@ -43,7 +43,11 @@ sounds like something.
 
 1. Grab the latest zip from **[Releases](https://github.com/keremkesgin/aftertone/releases/latest)**.
 2. Unzip, drag `Aftertone.app` to `/Applications`.
-3. Open it. Since it isn't notarized with an Apple Developer ID, the first launch needs a right-click → **Open** (Gatekeeper's standard warning for apps outside the App Store) — after that it opens normally.
+3. Open it. Since it isn't notarized with an Apple Developer ID, Gatekeeper blocks the first launch. Two ways to get past it:
+   - **Right-click → Open** — Control-click `Aftertone.app` and choose **Open**, then confirm in the dialog that appears.
+   - **System Settings approval** — if you just double-clicked and got the "can't be opened" alert, open **System Settings → Privacy & Security**, scroll down to the security section, and you'll see *"Aftertone was blocked to protect your Mac"* with an **Open Anyway** button. Click it, then confirm with your password or Touch ID.
+
+   Either way, this is only needed once — after the first approved launch, it opens normally.
 4. Grant the Automation permission prompt when it appears — Aftertone reads now-playing info from Spotify via Apple Events, nothing else.
 5. Click the menu bar icon to pick a position, turn on Vinyl Mode or Gradient Wallpaper, and adjust lyrics sync if it's ever a beat off.
 
